@@ -276,11 +276,11 @@ inherit the affinity from the task level):
 
 util_min: Integer. Can be specified at task level or phase level. Sets the min
 utilization value the task can have; which helps boosting the task from
-scheduler point of view.
+scheduler point of view. Value -1 removes the clamp.
 
 util_max: Integer. Can be specified at task level or phase level. Sets the max
 utilization value the task can have; which helps capping the task from
-scheduler point of view.
+scheduler point of view. Value -1 removes the clamp.
 
 *** NUMA memory binding
 
@@ -756,5 +756,3 @@ below)
    20000 ++--+----+---+----+---+---+----+---+----+--++ 494000
        17560556057560556057560656065606756065606756075607
                     Loop start time [msec]
-
-
