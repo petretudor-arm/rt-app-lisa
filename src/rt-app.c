@@ -969,7 +969,7 @@ static void __set_thread_nice(thread_data_t *data, sched_data_t *sched_data)
 static void _set_thread_cfs(thread_data_t *data, sched_data_t *sched_data)
 {
 	/* Priority unchanged => Policy unchanged */
-	if (sched_data->prio == sched_data->prev_prio)
+	if (sched_data->prio == sched_data->prev_data->prio)
 		return;
 	/*
 	 * In the CFS case, sched_data->prio is the NICE value. As long as the
@@ -977,8 +977,8 @@ static void _set_thread_cfs(thread_data_t *data, sched_data_t *sched_data)
 	 * __set_thread_policy_priority()
 	 *
 	 */
-	if (!data->curr_sched_data ||
-	    (sched_data->policy != data->curr_sched_data->policy))
+	if ((sched_data->policy != sched_data->prev_data->policy) |
+	    (sched_data->prio != sched_data->prev_data->prio))
 		__set_thread_policy_priority(data, sched_data);
 
 	if (sched_data->policy == other)
@@ -990,7 +990,7 @@ static void _set_thread_cfs(thread_data_t *data, sched_data_t *sched_data)
 static void _set_thread_rt(thread_data_t *data, sched_data_t *sched_data)
 {
 	/* Priority unchanged => Policy unchanged */
-	if (sched_data->prio == sched_data->prev_prio)
+	if (sched_data->prio == sched_data->prev_data->prio)
 		return;
 
 	__set_thread_policy_priority(data, sched_data);
@@ -1084,10 +1084,10 @@ static void _set_thread_uclamp(thread_data_t *data, sched_data_t *sched_data)
 
 static void set_thread_param(thread_data_t *data, sched_data_t *sched_data)
 {
-	if (!sched_data)
-		return;
-
-	if (data->curr_sched_data == sched_data)
+	/* If nothing have changed compared to previous phase, bail out */
+	if (sched_data->prio == sched_data->prev_data->prio &&
+	    !sched_data->runtime && !sched_data->period && !sched_data->deadline &&
+	    sched_data->util_min == -2 && sched_data->util_max == -2)
 		return;
 
 	switch (sched_data->policy) {
@@ -1110,8 +1110,6 @@ static void set_thread_param(thread_data_t *data, sched_data_t *sched_data)
 				  sched_data->policy);
 			exit(EXIT_FAILURE);
 	}
-
-	data->curr_sched_data = sched_data;
 }
 
 void setup_thread_gnuplot(thread_data_t *tdata);

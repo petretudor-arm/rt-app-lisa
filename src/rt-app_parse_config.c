@@ -831,8 +831,9 @@ static sched_data_t *parse_sched_data(sched_data_t *prev_data, struct json_objec
 {
 	sched_data_t tmp_data = {
 		.policy = prev_data->policy,
-		.prev_prio = prev_data->prio
+		.prev_data = prev_data
 	};
+	sched_data_t *new_data;
 	char *def_str_policy;
 	char *policy;
 	int prior_def;
@@ -899,22 +900,12 @@ static sched_data_t *parse_sched_data(sched_data_t *prev_data, struct json_objec
 	tmp_data.period *= 1000;
 	tmp_data.deadline *= 1000;
 
-	/* Check if we found at least one meaningful scheduler parameter */
-	if (tmp_data.prio != tmp_data.prev_prio ||
-	    tmp_data.runtime || tmp_data.period || tmp_data.deadline ||
-	    tmp_data.util_min != -2 || tmp_data.util_max != -2) {
-		sched_data_t *new_data;
+	new_data = malloc(sizeof(sched_data_t));
+	memcpy(new_data, &tmp_data, sizeof(sched_data_t));
 
-		/* At least 1 parameters has been set in the object */
-		new_data = malloc(sizeof(sched_data_t));
-		memcpy( new_data, &tmp_data,sizeof(sched_data_t));
+	log_debug(PIN "key: set scheduler %d with priority %d", new_data->policy, new_data->prio);
 
-		log_debug(PIN "key: set scheduler %d with priority %d", new_data->policy, new_data->prio);
-
-		return new_data;
-	}
-
-	return NULL;
+	return new_data;
 }
 
 static taskgroup_data_t *parse_taskgroup_data(struct json_object *obj)
@@ -946,13 +937,6 @@ static taskgroup_data_t *parse_taskgroup_data(struct json_object *obj)
 
 static void check_taskgroup_policy_dep(phase_data_t *pdata, thread_data_t *tdata)
 {
-	/*
-	 * Save sched_data as thread's current sched_data in case its policy_t is
-	 * set to a valid scheduler policy.
-	 */
-	if (pdata->sched_data)
-		tdata->curr_sched_data = pdata->sched_data;
-
 	/* Save taskgroup_data as thread's current taskgroup_data. */
 	if (pdata->taskgroup_data)
 		tdata->curr_taskgroup_data = pdata->taskgroup_data;
@@ -962,14 +946,12 @@ static void check_taskgroup_policy_dep(phase_data_t *pdata, thread_data_t *tdata
 	 * taskgroup should not run in a policy other than SCHED_OTHER or
 	 * SCHED_IDLE.
 	 */
-	if (tdata->curr_sched_data && tdata->curr_taskgroup_data) {
-		policy_t policy = tdata->curr_sched_data->policy;
+	policy_t policy = tdata->sched_data->policy;
 
-		if (policy != other && policy != idle) {
-			log_critical(PIN2 "No taskgroup support for policy %s",
-			             policy_to_string(policy));
-			exit(EXIT_INV_CONFIG);
-		}
+	if (policy != other && policy != idle) {
+		log_critical(PIN2 "No taskgroup support for policy %s",
+				policy_to_string(policy));
+		exit(EXIT_INV_CONFIG);
 	}
 }
 
@@ -1026,6 +1008,10 @@ parse_task_data(char *name, struct json_object *obj, int index,
 	sched_data_t prev_sched_data = {
 		.policy = opts->policy,
 		.prio = THREAD_PRIORITY_INVALID,
+		/* Setting this one to NULL is safe, as this data will never be
+		 * used directly, it's "before" the first phase
+		 */
+		.prev_data = NULL
 	};
 	phase_data_t prev_phase_data = { .sched_data = &prev_sched_data };
 
@@ -1076,7 +1062,6 @@ parse_task_data(char *name, struct json_object *obj, int index,
 	 * Thread's current sched_data and taskgroup_data are used to detect
 	 * policy/taskgroup misconfiguration.
 	 */
-	data->curr_sched_data = data->sched_data;
 	data->curr_taskgroup_data = data->taskgroup_data;
 
 	/* initial delay */
@@ -1153,8 +1138,7 @@ parse_task_data(char *name, struct json_object *obj, int index,
 			data->loop = -1;
 	}
 
-	/* Reset thread's current sched_data and taskgroup_data after parsing. */
-	data->curr_sched_data = NULL;
+	/* Reset thread's current taskgroup_data after parsing. */
 	data->curr_taskgroup_data = NULL;
 }
 

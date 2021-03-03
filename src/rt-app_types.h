@@ -185,12 +185,12 @@ typedef struct _numaset_data_t {
 typedef struct _sched_data_t {
 	policy_t policy;
 	int prio;
-	int prev_prio;
 	unsigned long runtime;
 	unsigned long deadline;
 	unsigned long period;
 	int util_min;
 	int util_max;
+	struct _sched_data_t *prev_data;
 } sched_data_t;
 
 typedef struct _taskgroup_data_t {
@@ -222,7 +222,6 @@ typedef struct _thread_data_t {
 	numaset_data_t *curr_numa_data; /* Current numa bind set being used */
 
 	sched_data_t *sched_data; /* scheduler policy information */
-	sched_data_t *curr_sched_data; /* current scheduler policy */
 
 	taskgroup_data_t *taskgroup_data; /* taskgroup information */
 	taskgroup_data_t *curr_taskgroup_data; /* current taskgroup */
