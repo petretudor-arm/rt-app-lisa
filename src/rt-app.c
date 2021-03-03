@@ -969,15 +969,13 @@ static void __set_thread_nice(thread_data_t *data, sched_data_t *sched_data)
 static void _set_thread_cfs(thread_data_t *data, sched_data_t *sched_data)
 {
 	/* Priority unchanged => Policy unchanged */
-	if (sched_data->prio == THREAD_PRIORITY_UNCHANGED)
+	if (sched_data->prio == sched_data->prev_prio)
 		return;
 	/*
 	 * In the CFS case, sched_data->prio is the NICE value. As long as the
 	 * policy hasn't changed, there's no need to call
 	 * __set_thread_policy_priority()
 	 *
-	 * We can't rely on policy == same as it is overwritten in
-	 * set_thread_param()
 	 */
 	if (!data->curr_sched_data ||
 	    (sched_data->policy != data->curr_sched_data->policy))
@@ -992,7 +990,7 @@ static void _set_thread_cfs(thread_data_t *data, sched_data_t *sched_data)
 static void _set_thread_rt(thread_data_t *data, sched_data_t *sched_data)
 {
 	/* Priority unchanged => Policy unchanged */
-	if (sched_data->prio == THREAD_PRIORITY_UNCHANGED)
+	if (sched_data->prio == sched_data->prev_prio)
 		return;
 
 	__set_thread_policy_priority(data, sched_data);
@@ -1091,10 +1089,6 @@ static void set_thread_param(thread_data_t *data, sched_data_t *sched_data)
 
 	if (data->curr_sched_data == sched_data)
 		return;
-
-	/* if no policy is specified, reuse the previous one */
-	if ((sched_data->policy == same) && data->curr_sched_data)
-		sched_data->policy = data->curr_sched_data->policy;
 
 	switch (sched_data->policy) {
 		case rr:

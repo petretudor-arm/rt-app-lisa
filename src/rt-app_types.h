@@ -41,7 +41,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #define DEFAULT_THREAD_PRIORITY 10
 #define DEFAULT_THREAD_NICE 0
-#define THREAD_PRIORITY_UNCHANGED INT_MAX
+#define THREAD_PRIORITY_INVALID INT_MAX
 
 #define PATH_LENGTH 256
 
@@ -64,8 +64,7 @@ typedef enum policy_t
 	idle = SCHED_IDLE,
 	rr = SCHED_RR,
 	fifo = SCHED_FIFO,
-	deadline = SCHED_DEADLINE,
-	same = -1
+	deadline = SCHED_DEADLINE
 } policy_t;
 
 typedef enum resource_t
@@ -186,6 +185,7 @@ typedef struct _numaset_data_t {
 typedef struct _sched_data_t {
 	policy_t policy;
 	int prio;
+	int prev_prio;
 	unsigned long runtime;
 	unsigned long deadline;
 	unsigned long period;

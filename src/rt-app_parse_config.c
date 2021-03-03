@@ -827,19 +827,22 @@ static void parse_numa_data(struct json_object *obj, numaset_data_t *data)
 	}
 }
 
-static sched_data_t *parse_sched_data(struct json_object *obj, int def_policy)
+static sched_data_t *parse_sched_data(sched_data_t *prev_data, struct json_object *obj)
 {
-	sched_data_t tmp_data = { .policy = same };
+	sched_data_t tmp_data = {
+		.policy = prev_data->policy,
+		.prev_prio = prev_data->prio
+	};
 	char *def_str_policy;
 	char *policy;
 	int prior_def;
 
 	/* Get default policy */
-	def_str_policy = policy_to_string(def_policy);
+	def_str_policy = policy_to_string(prev_data->policy);
 
 	/* Get Policy */
 	policy = get_string_value_from(obj, "policy", TRUE, def_str_policy);
-	if (policy ){
+	if (policy) {
 		if (string_to_policy(policy, &tmp_data.policy) != 0) {
 			log_critical(PIN2 "Invalid policy %s", policy);
 			exit(EXIT_INV_CONFIG);
@@ -848,9 +851,6 @@ static sched_data_t *parse_sched_data(struct json_object *obj, int def_policy)
 
 	/* Get priority */
 	switch (tmp_data.policy) {
-	case same:
-		prior_def = THREAD_PRIORITY_UNCHANGED;
-		break;
 	case other:
 	case idle:
 		prior_def = DEFAULT_THREAD_NICE;
@@ -886,15 +886,13 @@ static sched_data_t *parse_sched_data(struct json_object *obj, int def_policy)
 		exit(EXIT_INV_CONFIG);
 	}
 
-	if (def_policy != same) {
-		/* Support legacy grammar for thread object */
-		if (!tmp_data.runtime)
-			tmp_data.runtime = get_int_value_from(obj, "runtime", TRUE, 0);
-		if (!tmp_data.period)
-			tmp_data.period = get_int_value_from(obj, "period", TRUE, tmp_data.runtime);
-		if (!tmp_data.deadline)
-			tmp_data.deadline = get_int_value_from(obj, "deadline", TRUE, tmp_data.period);
-	}
+	/* Support legacy grammar for thread object */
+	if (!tmp_data.runtime)
+		tmp_data.runtime = get_int_value_from(obj, "runtime", TRUE, 0);
+	if (!tmp_data.period)
+		tmp_data.period = get_int_value_from(obj, "period", TRUE, tmp_data.runtime);
+	if (!tmp_data.deadline)
+		tmp_data.deadline = get_int_value_from(obj, "deadline", TRUE, tmp_data.period);
 
 	/* Move from usec to nanosec */
 	tmp_data.runtime *= 1000;
@@ -902,7 +900,7 @@ static sched_data_t *parse_sched_data(struct json_object *obj, int def_policy)
 	tmp_data.deadline *= 1000;
 
 	/* Check if we found at least one meaningful scheduler parameter */
-	if (tmp_data.prio != THREAD_PRIORITY_UNCHANGED ||
+	if (tmp_data.prio != tmp_data.prev_prio ||
 	    tmp_data.runtime || tmp_data.period || tmp_data.deadline ||
 	    tmp_data.util_min != -2 || tmp_data.util_max != -2) {
 		sched_data_t *new_data;
@@ -952,7 +950,7 @@ static void check_taskgroup_policy_dep(phase_data_t *pdata, thread_data_t *tdata
 	 * Save sched_data as thread's current sched_data in case its policy_t is
 	 * set to a valid scheduler policy.
 	 */
-	if (pdata->sched_data && pdata->sched_data->policy != same)
+	if (pdata->sched_data)
 		tdata->curr_sched_data = pdata->sched_data;
 
 	/* Save taskgroup_data as thread's current taskgroup_data. */
@@ -976,7 +974,7 @@ static void check_taskgroup_policy_dep(phase_data_t *pdata, thread_data_t *tdata
 }
 
 static void
-parse_task_phase_data(struct json_object *obj,
+parse_task_phase_data(struct json_object *obj, phase_data_t *prev_data,
 		  phase_data_t *data, thread_data_t *tdata, rtapp_options_t *opts)
 {
 	/* used in the foreach macro */
@@ -1016,7 +1014,7 @@ parse_task_phase_data(struct json_object *obj,
 	}
 	parse_cpuset_data(obj, &data->cpu_data);
 	parse_numa_data(obj, &data->numa_data);
-	data->sched_data = parse_sched_data(obj, same);
+	data->sched_data = parse_sched_data(prev_data->sched_data, obj);
 	data->taskgroup_data = parse_taskgroup_data(obj);
 }
 
@@ -1025,6 +1023,11 @@ parse_task_data(char *name, struct json_object *obj, int index,
 		  thread_data_t *data, rtapp_options_t *opts)
 {
 	struct json_object *phases_obj, *resources;
+	sched_data_t prev_sched_data = {
+		.policy = opts->policy,
+		.prio = THREAD_PRIORITY_INVALID,
+	};
+	phase_data_t prev_phase_data = { .sched_data = &prev_sched_data };
 
 	log_info(PFX "Parsing task %s [%d]", name, index);
 
@@ -1065,7 +1068,7 @@ parse_task_data(char *name, struct json_object *obj, int index,
 	/* numa */
 	parse_numa_data(obj, &data->numa_data);
 	/* Scheduling policy */
-	data->sched_data = parse_sched_data(obj, opts->policy);
+	data->sched_data = parse_sched_data(&prev_sched_data, obj);
 	/* Taskgroup */
 	data->taskgroup_data = parse_taskgroup_data(obj);
 
@@ -1103,7 +1106,9 @@ parse_task_data(char *name, struct json_object *obj, int index,
 		foreach(phases_obj, entry, key, val, idx) {
 			log_info(PIN "Parsing phase %s", key);
 			assure_type_is(val, phases_obj, key, json_type_object);
-			parse_task_phase_data(val, &data->phases[idx], data, opts);
+			parse_task_phase_data(val, &prev_phase_data, &data->phases[idx], data, opts);
+			prev_phase_data = data->phases[idx];
+
 			/*
 			 * Uses thread's current sched_data and taskgroup_data
 			 * to detect policy/taskgroup misconfiguration.
@@ -1117,7 +1122,7 @@ parse_task_data(char *name, struct json_object *obj, int index,
 	} else {
 		data->nphases = 1;
 		data->phases = malloc(sizeof(phase_data_t) * data->nphases);
-		parse_task_phase_data(obj,  &data->phases[0], data, opts);
+		parse_task_phase_data(obj, &prev_phase_data, &data->phases[0], data, opts);
 
 		/* There is no "phases" object which means that thread and phase will
 		 * use same scheduling parameters. But thread object looks for default
