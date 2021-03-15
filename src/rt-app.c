@@ -243,7 +243,7 @@ int calibrate_cpu_cycles_1(int clock)
 	int max_load_loop = 10000;
 	unsigned int diff;
 	int nsec_per_loop, avg_per_loop = 0;
-	int cal_trial = 1000;
+	int cal_trial = 100;
 
 	while (cal_trial) {
 		cal_trial--;
@@ -258,11 +258,12 @@ int calibrate_cpu_cycles_1(int clock)
 
 		diff = (int)timespec_sub_to_ns(&stop, &start);
 		nsec_per_loop = diff / max_load_loop;
-		avg_per_loop = (avg_per_loop + nsec_per_loop) >> 1;
+		/* avg_per_loop = (avg_per_loop + nsec_per_loop) >> 1; */
+		avg_per_loop = avg_per_loop < nsec_per_loop ? avg_per_loop : nsec_per_loop;
 
 		/* collect a critical mass of samples.*/
-		if ((abs(nsec_per_loop - avg_per_loop) * 50)  < avg_per_loop)
-			return avg_per_loop;
+		/* if ((abs(nsec_per_loop - avg_per_loop) * 50)  < avg_per_loop) */
+		/* 	return avg_per_loop; */
 
 		/*
 		* use several loop duration in order to be sure to not
@@ -287,8 +288,8 @@ int calibrate_cpu_cycles_2(int clock)
 	struct timespec start, stop;
 	int max_load_loop = 10000;
 	unsigned int diff;
-	int nsec_per_loop, avg_per_loop = 0;
-	int cal_trial = 1000;
+	unsigned long long nsec_per_loop, avg_per_loop = 0;
+	int cal_trial = 100;
 
 	while (cal_trial) {
 		cal_trial--;
@@ -299,11 +300,14 @@ int calibrate_cpu_cycles_2(int clock)
 
 		diff = (int)timespec_sub_to_ns(&stop, &start);
 		nsec_per_loop = diff / max_load_loop;
-		avg_per_loop = (avg_per_loop + nsec_per_loop) >> 1;
+		/* avg_per_loop += nsec_per_loop; */
+		/* avg_per_loop = (avg_per_loop + nsec_per_loop) >> 1; */
+		/* avg_per_loop = avg_per_loop < nsec_per_loop ? avg_per_loop : nsec_per_loop; */
+		avg_per_loop += nsec_per_loop;
 
 		/* collect a critical mass of samples.*/
-		if ((abs(nsec_per_loop - avg_per_loop) * 50)  < avg_per_loop)
-			return avg_per_loop;
+		/* if ((abs(nsec_per_loop - avg_per_loop) * 50)  < avg_per_loop) */
+		/* 	return avg_per_loop; */
 
 		/*
 		* use several loop duration in order to be sure to not
@@ -314,7 +318,7 @@ int calibrate_cpu_cycles_2(int clock)
 		max_load_loop += 33333;
 		max_load_loop %= 1000000;
 	}
-	return 0;
+	return avg_per_loop / cal_trial;
 }
 
 /*
@@ -327,15 +331,16 @@ int calibrate_cpu_cycles(int clock)
 	int calib1, calib2;
 
 	/* Run 1st method */
-	calib1 = calibrate_cpu_cycles_1(clock);
+	/* calib1 = calibrate_cpu_cycles_1(clock); */
 
 	/* Run 2nd method */
 	calib2 = calibrate_cpu_cycles_2(clock);
+	return calib2;
 
-	if (calib1 < calib2)
-		return calib1;
-	else
-		return calib2;
+	/* if (calib1 < calib2) */
+	/* 	return calib1; */
+	/* else */
+	/* 	return calib2; */
 
 }
 
