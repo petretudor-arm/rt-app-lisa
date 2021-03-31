@@ -834,15 +834,14 @@ static void set_thread_affinity(thread_data_t *data, cpuset_data_t *cpu_data)
 		unsigned int cpu_count;
 
 		ret = pthread_getaffinity_np(pthread_self(),
-						    sizeof(cpu_set_t), &cpuset);
+						    sizeof(cpuset), &cpuset);
 		if (ret != 0) {
 			errno = ret;
 			perror("pthread_get_affinity");
 			exit(EXIT_FAILURE);
 		}
-		cpu_count = CPU_COUNT(&cpuset);
-		data->def_cpu_data.cpusetsize = CPU_ALLOC_SIZE(cpu_count);
-		data->def_cpu_data.cpuset = CPU_ALLOC(cpu_count);
+		data->def_cpu_data.cpusetsize = sizeof(cpuset);
+		data->def_cpu_data.cpuset = malloc(sizeof(cpuset));
 		memcpy(data->def_cpu_data.cpuset, &cpuset,
 						data->def_cpu_data.cpusetsize);
 		create_cpuset_str(&data->def_cpu_data);
@@ -867,8 +866,8 @@ static void set_thread_affinity(thread_data_t *data, cpuset_data_t *cpu_data)
 			 actual_cpu_data->cpusetsize,
 			 actual_cpu_data->cpuset, data->curr_cpu_data->cpuset))
 	  {
-		log_debug("[%d] setting cpu affinity to CPU(s) %s", data->ind,
-			actual_cpu_data->cpuset_str);
+		log_debug("[%d] setting cpu affinity to CPU(s) %s size=%d count=%d", data->ind,
+			  actual_cpu_data->cpuset_str, actual_cpu_data->cpusetsize, CPU_COUNT_S(actual_cpu_data->cpusetsize, actual_cpu_data->cpuset));
 		ret = pthread_setaffinity_np(pthread_self(),
 						actual_cpu_data->cpusetsize,
 						actual_cpu_data->cpuset);

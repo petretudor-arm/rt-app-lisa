@@ -773,7 +773,7 @@ static void parse_cpuset_data(struct json_object *obj, cpuset_data_t *data)
 				free(data->cpuset_str);
 				exit(EXIT_INV_CONFIG);
 			}
-			CPU_SET_S(data->cpusetsize, cpu_idx, data->cpuset);
+			CPU_SET_S(cpu_idx, data->cpusetsize, data->cpuset);
 		}
 	} else {
 		data->cpuset_str = strdup("-");
