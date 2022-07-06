@@ -64,7 +64,6 @@ static pthread_mutex_t joining_mutex;
 static pthread_mutex_t fork_mutex;
 
 static ftrace_data_t ft_data = {
-	.debugfs = "/sys/kernel/debug",
 	.marker_fd = -1,
 };
 
@@ -1607,7 +1606,7 @@ int main(int argc, char* argv[])
 	if (ftrace_level != FTRACE_NONE) {
 		log_notice("configuring ftrace");
 		// check if tracing is enabled
-		strcpy(tmp, ft_data.debugfs);
+		strcpy(tmp, opts.ftracedir);
 		strcat(tmp, "/tracing/tracing_on");
 		int ftrace_f = open(tmp, O_RDONLY);
 		if (ftrace_f < 0){
@@ -1622,7 +1621,7 @@ int main(int argc, char* argv[])
 		}
 		close(ftrace_f);
 		// set the marker
-		strcpy(tmp, ft_data.debugfs);
+		strcpy(tmp, opts.ftracedir);
 		strcat(tmp, "/tracing/trace_marker");
 		ft_data.marker_fd = open(tmp, O_WRONLY);
 		if (ft_data.marker_fd < 0) {
