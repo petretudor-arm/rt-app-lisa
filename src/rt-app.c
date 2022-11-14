@@ -235,22 +235,32 @@ int calibrate_cpu_cycles_1(int clock)
 
 	while (cal_trial) {
 		cal_trial--;
+
+		log_debug("calibrate_cpu_cycles_1: 1: cal_trial=%i ", cal_trial);
 		sleep.tv_sec = 1;
 		sleep.tv_nsec = 0;
 
 		clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep, NULL);
 
+
+		log_debug("calibrate_cpu_cycles_1: 2: max_load_loop=%i", max_load_loop);
 		clock_gettime(clock, &start);
 		waste_cpu_cycles(max_load_loop);
 		clock_gettime(clock, &stop);
 
 		diff = (int)timespec_sub_to_ns(&stop, &start);
+		log_debug("calibrate_cpu_cycles_1: 3.0: diff=%u", diff);
 		nsec_per_loop = diff / max_load_loop;
+		log_debug("calibrate_cpu_cycles_1: 3.1: diff=%u nsec_per_loop=%i avg_per_loop=%i", diff, nsec_per_loop, avg_per_loop);
 		avg_per_loop = (avg_per_loop + nsec_per_loop) >> 1;
+		log_debug("calibrate_cpu_cycles_1: 4: Updated avg_per_loop=%i", avg_per_loop);
 
 		/* collect a critical mass of samples.*/
-		if ((abs(nsec_per_loop - avg_per_loop) * 50)  < avg_per_loop)
+
+		if ((abs(nsec_per_loop - avg_per_loop) * 50)  < avg_per_loop) {
+			log_debug("calibrate_cpu_cycles_1: 5: got enough samples cal_trial=%i", cal_trial);
 			return avg_per_loop;
+		}
 
 		/*
 		* use several loop duration in order to be sure to not
@@ -280,18 +290,26 @@ int calibrate_cpu_cycles_2(int clock)
 
 	while (cal_trial) {
 		cal_trial--;
+		log_debug("calibrate_cpu_cycles_2: 1: cal_trial=%i ", cal_trial);
 
+
+		log_debug("calibrate_cpu_cycles_2: 2: max_load_loop=%i", max_load_loop);
 		clock_gettime(clock, &start);
 		waste_cpu_cycles(max_load_loop);
 		clock_gettime(clock, &stop);
 
 		diff = (int)timespec_sub_to_ns(&stop, &start);
+		log_debug("calibrate_cpu_cycles_2: 3.0: diff=%u", diff);
 		nsec_per_loop = diff / max_load_loop;
+		log_debug("calibrate_cpu_cycles_2: 3.1: diff=%u nsec_per_loop=%i avg_per_loop=%i", diff, nsec_per_loop, avg_per_loop);
 		avg_per_loop = (avg_per_loop + nsec_per_loop) >> 1;
+		log_debug("calibrate_cpu_cycles_2: 4: Updated avg_per_loop=%i", avg_per_loop);
 
 		/* collect a critical mass of samples.*/
-		if ((abs(nsec_per_loop - avg_per_loop) * 50)  < avg_per_loop)
+		if ((abs(nsec_per_loop - avg_per_loop) * 50)  < avg_per_loop) {
+			log_debug("calibrate_cpu_cycles_2: 5: got enough samples cal_trial=%i", cal_trial);
 			return avg_per_loop;
+		}
 
 		/*
 		* use several loop duration in order to be sure to not
@@ -316,14 +334,19 @@ int calibrate_cpu_cycles(int clock)
 
 	/* Run 1st method */
 	calib1 = calibrate_cpu_cycles_1(clock);
+	log_debug("calibrate_cpu_cycles_1: 6: calib1=%i ", calib1);
 
 	/* Run 2nd method */
 	calib2 = calibrate_cpu_cycles_2(clock);
+	log_debug("calibrate_cpu_cycles_2: 6: calib2=%i ", calib2);
 
-	if (calib1 < calib2)
+	if (calib1 < calib2) {
+		log_debug("calibrate_cpu_cycles: 1: return=%i ", calib1);
 		return calib1;
-	else
+	} else {
+		log_debug("calibrate_cpu_cycles: 1: return=%i ", calib2);
 		return calib2;
+	}
 
 }
 
