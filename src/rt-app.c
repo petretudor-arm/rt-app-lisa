@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define _GNU_SOURCE
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
@@ -221,36 +222,30 @@ void waste_cpu_cycles(unsigned long long load_loops)
 
 /*
 * calibrate_cpu_cycles_1()
-* 1st method to calibrate the ns per loop value
 * We alternate idle period and run period in order to not trig some hw
-* protection mechanism like thermal mitgation
+* protection mechanism like thermal mitgation when cool_down=true
 */
-int calibrate_cpu_cycles_1(int clock)
+int do_calibrate_cpu_cycles(int clock, bool cool_down)
 {
 	struct timespec start, stop, sleep;
 	int max_load_loop = 10000;
-	unsigned int diff;
-	int nsec_per_loop, avg_per_loop = 0;
-	int cal_trial = 1000;
+	size_t sample_size = 200;
+	double sum = 0;
+	int64_t diff = 0;
 
-	while (cal_trial) {
-		cal_trial--;
-		sleep.tv_sec = 1;
-		sleep.tv_nsec = 0;
-
-		clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep, NULL);
+	for (size_t i=0; i < sample_size; i++) {
+		if (cool_down) {
+			sleep.tv_sec = 1;
+			sleep.tv_nsec = 0;
+			clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep, NULL);
+		}
 
 		clock_gettime(clock, &start);
 		waste_cpu_cycles(max_load_loop);
 		clock_gettime(clock, &stop);
 
-		diff = (int)timespec_sub_to_ns(&stop, &start);
-		nsec_per_loop = diff / max_load_loop;
-		avg_per_loop = (avg_per_loop + nsec_per_loop) >> 1;
-
-		/* collect a critical mass of samples.*/
-		if ((abs(nsec_per_loop - avg_per_loop) * 50)  < avg_per_loop)
-			return avg_per_loop;
+		diff = timespec_sub_to_ns(&stop, &start);
+		sum += diff / (double)max_load_loop;
 
 		/*
 		* use several loop duration in order to be sure to not
@@ -261,48 +256,8 @@ int calibrate_cpu_cycles_1(int clock)
 		max_load_loop += 33333;
 		max_load_loop %= 1000000;
 	}
-	return 0;
-}
 
-/*
-* calibrate_cpu_cycles_2()
-* 2nd method to calibrate the ns per loop value
-* We continously runs something to ensure that CPU is set to max freq by the
-* governor
-*/
-int calibrate_cpu_cycles_2(int clock)
-{
-	struct timespec start, stop;
-	int max_load_loop = 10000;
-	unsigned int diff;
-	int nsec_per_loop, avg_per_loop = 0;
-	int cal_trial = 1000;
-
-	while (cal_trial) {
-		cal_trial--;
-
-		clock_gettime(clock, &start);
-		waste_cpu_cycles(max_load_loop);
-		clock_gettime(clock, &stop);
-
-		diff = (int)timespec_sub_to_ns(&stop, &start);
-		nsec_per_loop = diff / max_load_loop;
-		avg_per_loop = (avg_per_loop + nsec_per_loop) >> 1;
-
-		/* collect a critical mass of samples.*/
-		if ((abs(nsec_per_loop - avg_per_loop) * 50)  < avg_per_loop)
-			return avg_per_loop;
-
-		/*
-		* use several loop duration in order to be sure to not
-		* fall into a specific platform loop duration
-		*(like the cpufreq period)
-		*/
-		/*randomize the number of loops and recheck 1000 times*/
-		max_load_loop += 33333;
-		max_load_loop %= 1000000;
-	}
-	return 0;
+	return sum / sample_size;
 }
 
 /*
@@ -314,11 +269,11 @@ int calibrate_cpu_cycles(int clock)
 {
 	int calib1, calib2;
 
-	/* Run 1st method */
-	calib1 = calibrate_cpu_cycles_1(clock);
+	/* With some cool down sleeps */
+	calib1 = do_calibrate_cpu_cycles(clock, true);
 
-	/* Run 2nd method */
-	calib2 = calibrate_cpu_cycles_2(clock);
+	/* Without any cool down */
+	calib2 = do_calibrate_cpu_cycles(clock, false);
 
 	if (calib1 < calib2)
 		return calib1;
