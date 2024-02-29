@@ -363,7 +363,10 @@ static void memload(unsigned long count, struct _rtapp_iomem_buf *iomem)
 		else
 			size = count;
 
-		memset(iomem->ptr, 0, size);
+		for (size_t i = 0; i < size; i++) {
+			*((volatile char *)iomem->ptr + i) = 0;
+		}
+
 		count -= size;
 	}
 }
